@@ -1,0 +1,17 @@
+{
+    "objectscript.conn": {
+        "active": true,
+        "server": "docker",
+        "ns": "USER"
+    },
+    "intersystems.servers": {
+        "docker":{
+            "webServer": {
+                "host": "127.0.0.1",
+                "port": 8081,
+                "scheme": "http"
+            },
+            "username": "SuperUser"
+        }
+    }
+}

@@ -1,0 +1,17 @@
+set $namespace="%SYS"
+Do ##class(Security.Users).UnExpireUserPasswords("*")
+Do ##class(Config.NLS.Locales).Install("jpuw")
+
+//SSLクライアント test作成
+set status=##class(Security.SSLConfigs).Create("test")
+
+// Embedded Python用にCallInサービスを有効化（現在の設定を取得）
+set st=##class(Security.Services).Get("%Service_CallIn",.pro)
+set pro("Enabled")=1
+// 修正登録
+set st=##class(Security.Services).Modify("%Service_CallIn",.pro)
+
+//クラス定義インポート
+set $namespace="user"
+do $System.OBJ.LoadDir("/opt/src","ck",,1)
+

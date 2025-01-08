@@ -1,0 +1,23 @@
+services:
+  iris:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: ["9085:52773","9082:1972"]
+    container_name: iriscon1
+    volumes: ["./data:/data","./src:/src"]
+    environment: 
+      - TZ=JST-9
+
+  webgateway:
+    image: intersystems/webgateway:2025.1.0VECANN.117.0
+    container_name: WG1
+    init: true
+    ports:
+      - 8081:80
+      #- 8443:443
+    environment:
+    - ISC_CSP_CONF_FILE=/webgateway-shared/CSP.conf
+    - ISC_CSP_INI_FILE=/webgateway-shared/CSP.ini
+    volumes:
+    - ./webgateway:/webgateway-shared
