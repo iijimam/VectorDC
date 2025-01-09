@@ -168,3 +168,148 @@ do ##class(Test.DCTopic).UpdateNonTagText()
 ```
 do ##class(Test.DCTopic).storeVectore()
 ```
+
+# Embedding typeのカラムを作成する
+
+Embeddingの構成設定は、SQL文を実行したネームスペースに保存される
+
+## Embedding configurationを作成する：OpenAI編
+https://docs.intersystems.com/iris20251/csp/docbook/DocBook.UI.Page.cls?KEY=GSQL_vecsearch#GSQL_vecsearch_insembed_embedconfig
+
+**Docのまんまで動く**
+
+```
+INSERT INTO %Embedding.Config (Name, Configuration, EmbeddingClass, VectorLength, Description)
+  VALUES ('my-opanai-config', 
+          '{"apiKey":"<api key>", 
+            "sslConfig": "test", 
+            "modelName": "text-embedding-3-small"}',
+          '%Embedding.OpenAI', 
+          1536,  
+          'a small embedding model provided by OpenAI') 
+```
+
+Test.DCTopicのText2,url,Titleを持つテーブルを新規で作成
+
+```
+CREATE TABLE EmbeddingTest.DCTopic (
+  Text2 VARCHAR(3000000),
+  url VARCHAR(1000),
+  Title VARCHAR(1000),
+  TextVector EMBEDDING('my-opanai-config','Text2')
+)
+```
+Test.DCTopic.clsのText2,url,TitleをTest.EmbeddingTest.DCTopicにコピーする
+
+```
+do ##class(Test.DCTool).CopyData()
+```
+Text2をInsertすると自動的にEmbeddingを行ってTextVectorに入れてくれる
+(OpenAIを使うので途中で強制終了して以下実行してみる 最初18件までのデータで試す)
+
+```
+SELECT TOP 5 ID,Title,url FROM EmbeddingTest.DCTopic
+    ORDER BY VECTOR_DOT_PRODUCT(TextVector, 
+                              EMBEDDING(?)) DESC
+```
+
+例）
+```
+SELECT TOP 5 ID,Title,url FROM EmbeddingTest.DCTopic
+    ORDER BY VECTOR_DOT_PRODUCT(TextVector, 
+                              EMBEDDING('リレーショナルDBとの違い')) DESC
+
+```
+
+## Embedding configurationを作成する：SentenceTransform編
+
+事前にsentence_transformersをpipしておく必要あり
+
+指定するConfigurationの内容は、%Embedding.SentenceTransformersのIsValidConfig()の説明文にあり
+
+>Validates %Embedding.Config's Configuration property. { "modelName" : , "hfCachePath" : , "hfToken" : , "checkTokenCount": , "maxTokens": "pythonPath": } Also checks if the python package 'sentence_transformers' is installed.
+
+modelNameだけだと hfCachePathがないと怒られる。
+
+クラス定義の説明文に以下あり
+> "modelName" : <Name of sentence_transformers model>,
+> "hfCachePath" : <Path to cache folder where models will be downloaded>, 
+> "hfToken" : <Optional token to access gated hugging face models>, 
+> "checkTokenCount": <Optional, whether to check token count of input>, 
+> "maxTokens": <Optional, token threshold for input>
+> "pythonPath": <Optional, path to use to retrieve python packages>}
+
+hfCachePathは、https://note.com/ozzybot8/n/n21b84ccb0b42　を参考に調査
+
+https://usconfluence.iscinternal.com/pages/viewpage.action?pageId=858357014
+
+
+```
+INSERT INTO %Embedding.Config (Name, Configuration, EmbeddingClass, VectorLength, Description)
+  VALUES ('my-sentenceTransformer-config', 
+          '{"modelName": "sentence-transformers/stsb-xlm-r-multilingual",
+          "hfCachePath": "/home/irisowner/.cache/huggingface/hub/models--sentence-transformers--stsb-xlm-r-multilingual"}',
+          '%Embedding.SentenceTransformers', 
+          384,  
+          'a multi language model provided by SentenceTransformers') 
+```
+Test.DCTopicのText2,url,Titleを持つテーブルを新規で作成
+
+```
+CREATE TABLE EmbeddingTest.DCTopic (
+  Text2 VARCHAR(3000000),
+  url VARCHAR(1000),
+  Title VARCHAR(1000),
+  TextVector EMBEDDING('my-sentenceTransformer-config','Text2')
+)
+```
+
+この定義で作成し、INSERTでテストすると、これが出てる
+```
+USER>w rset2.%Message
+フィールド 'EmbeddingTest.DCTopic.TextVector' (値 'D0E913C443D34BC6ADA754BD3FA334FF@$vector') の妥当性検証が失敗しました
+```
+
+ということで、EMBEDDINGではなく、VECTOR型で定義する
+（https://usconfluence.iscinternal.com/pages/viewpage.action?pageId=858357014　の下の方にあり）
+
+```
+CREATE TABLE EmbeddingTest.DCTopic (
+  Text2 VARCHAR(3000000),
+  url VARCHAR(1000),
+  Title VARCHAR(1000),
+  TextVector VECTOR(DOUBLE,384)
+)
+```
+
+EMBEDDINGのタイプを使わないので、Text2に値を入れると勝手にTextVectorに入るわけではない。
+なので、VECTOR型の入れ方通り　TO_VECTOR(?,DOUBLE, 384)　が必要。
+EMBEDDINGは構成したモデルを使ってEMBEDDING関数が使えるので長いけど以下のようにかける。（INSERTの例）
+
+```
+insert into EmbeddingTest.DCTopic (TextVector) VALUES(TO_VECTOR(EMBEDDING(?,'my-sentenceTransformer-config'),DOUBLE,384))
+```
+
+
+Test.DCTopic.clsのText2,url,TitleをTest.EmbeddingTest.DCTopicにコピーして実行してみる
+
+```
+do ##class(Test.DCTool).CopyData(1)
+```
+処理時間：9556.6206
+
+Embedded Pythonで自分でSentenceTransformersのモデルにEmbeddingさせるほうが倍早い
+
+ということで、検索テスト
+```
+docker exec -it iriscon1 bash
+iris session iris
+do ##class(Test.DCTopic).Search2("データベースの配置について")
+```
+自分でSentenceTransformersを使ったものと若干結果が違う。
+
+Embeddingタイプを使うとき以下のnormalize_embeddings=Trueを指定する項目が見当たらないのでデフォルトのまま利用
+そのせい？
+```
+embeddings = model.encode(text,normalize_embeddings=True)
+```

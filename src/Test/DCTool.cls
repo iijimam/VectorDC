@@ -147,4 +147,48 @@ ClassMethod Diff(url As %String = "https://jp.community.intersystems.com/sitemap
 	return status
 }
 
+ClassMethod CopyData(flg As %Integer = 0)
+{
+	set start=$ZH
+	set sql1="select ID,Text2,Title,url from Test.DCTopic"
+	if flg=0 {
+		/*EMBEDDING型を使った場合
+		TextVector EMBEDDING('my-sentenceTransformer-config','Text2') と定義していると
+		Text2に値を入れる→Text2のEmbedding後 TextVectorに値を登録してくれる　便利
+		*/
+		set sql2="insert into EmbeddingTest.DCTopic (Text2,Title,url) VALUES(?,?,?)"
+	}
+	elseif flg=1 {
+		/*SentenceTransformersを使ったとき
+		フィールド 'EmbeddingTest.DCTopic.TextVector' (値 'D0E913C443D34BC6ADA754BD3FA334FF@$vector') の妥当性検証が失敗しました
+		と出たので、TextVectorの型をEMBEDDINGからVECTORに変更したらうまくいった
+		カラムの定義：TextVector VECTOR(DOUBLE,384)
+		*/
+		set sql2="insert into EmbeddingTest.DCTopic (Text2,Title,url,TextVector) VALUES(?,?,?,TO_VECTOR(EMBEDDING(?,'my-sentenceTransformer-config'),DOUBLE,384))"
+	}
+	set stmt1=##class(%SQL.Statement).%New()
+	set st=stmt1.%Prepare(sql1)
+	set rset=stmt1.%Execute()
+	
+	set stmt2=##class(%SQL.Statement).%New()
+	set st=stmt2.%Prepare(sql2)
+	set i=0
+	if flg=0 {
+		while rset.%Next() {
+			set rset2=stmt2.%Execute(rset.Text2,rset.Title,rset.url)
+			set i=i+1
+			write:$Extract(i,*)=0 i,"件処理しました",!
+		}
+	}
+	elseif flg=1 {
+		while rset.%Next() {
+			set rset2=stmt2.%Execute(rset.Text2,rset.Title,rset.url,rset.Text2)
+			set i=i+1
+			write:$Extract(i,*)=0 i,"件処理しました",!
+		}
+	}
+	set end=$ZH
+	write "処理時間：",end-start,!
+}
+
 }

@@ -134,6 +134,27 @@ ClassMethod Search(question As %String = "IRISとPythonの組み合わせ方")
     write "検索時間：",end-start,!
 }
 
+ClassMethod Search2(question As %String = "IRISとPythonの組み合わせ方")
+{
+    set start=$ZH
+    set questionv=..getVector(question)
+    //set sql="SELECT TOP 10 ID,Title,url,TextVector from Test.DCTopic Order by VECTOR_DOT_PRODUCT(TextVector, TO_VECTOR(?, DOUBLE, 384)) Desc"
+    set sql="SELECT TOP 10 VECTOR_DOT_PRODUCT(TextVector, TO_VECTOR(?, DOUBLE, 384)) as sim, Title,url from EmbeddingTest.DCTopic Order By sim Desc"
+    set stmt=##class(%SQL.Statement).%New()
+    set status=stmt.%Prepare(sql)
+    if $$$ISERR(status) {
+        do $system.OBJ.DisplayError(status)
+        return
+    }
+    set rset=stmt.%Execute(questionv)
+    while rset.%Next() {
+        write rset.%Get("sim")," - ",rset.Title," - ",rset.url,!
+        //write rset.ID,"-",rset.Title," - ",rset.url,!
+    }
+    set end=$ZH
+    write "検索時間：",end-start,!
+}
+
 ClassMethod RemoveTags(intext As %String(MAXLEN=300000)) As %String(MAXLEN=300000) [ Language = python ]
 {
 from bs4 import BeautifulSoup, Comment
