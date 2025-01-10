@@ -139,7 +139,7 @@ ClassMethod Search2(question As %String = "IRISとPythonの組み合わせ方")
     set start=$ZH
     set questionv=..getVector(question)
     //set sql="SELECT TOP 10 ID,Title,url,TextVector from Test.DCTopic Order by VECTOR_DOT_PRODUCT(TextVector, TO_VECTOR(?, DOUBLE, 384)) Desc"
-    set sql="SELECT TOP 10 VECTOR_DOT_PRODUCT(TextVector, TO_VECTOR(?, DOUBLE, 384)) as sim, Title,url from EmbeddingTest.DCTopic Order By sim Desc"
+    set sql="SELECT TOP 10 VECTOR_COSINE(TextVector, TO_VECTOR(?, DOUBLE, 384)) as sim, Title,url from EmbeddingTest.DCTopic Order By sim Desc"
     set stmt=##class(%SQL.Statement).%New()
     set status=stmt.%Prepare(sql)
     if $$$ISERR(status) {
